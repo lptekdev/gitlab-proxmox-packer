@@ -1,0 +1,59 @@
+logging {
+  level = "warn"
+}
+
+prometheus.exporter.unix "default" { /* use defaults */
+  enable_collectors = ["meminfo"]
+}
+
+discovery.relabel "integrations_node_exporter" {
+  targets = prometheus.exporter.unix.default.targets
+  rule {
+    target_label = "instance"
+    replacement  = constants.hostname
+  }
+
+  rule {
+    target_label = "job"
+    replacement = "node_exporter"
+  }
+}
+
+prometheus.scrape "default" {
+	targets    = discovery.relabel.integrations_node_exporter.output //prometheus.exporter.unix.default.targets
+	forward_to = [prometheus.remote_write.default.receiver]
+	scrape_interval = "10s"
+}
+
+prometheus.remote_write "default" {
+  // Send metrics to a locally running Mimir.
+  endpoint {
+    url = "http://mimir.domain:9009/api/v1/push" // change for your Mimir instance
+  }
+}
+
+//loki.source.journal "nginx" {
+//  forward_to = [loki.relabel.addhostname.receiver]
+//  matches    = "_SYSTEMD_UNIT=nginx.service"
+//  labels     = {service = "nginx"}
+//}
+
+loki.source.journal "journal" {
+  forward_to    = [loki.relabel.addhostname.receiver]
+}
+
+loki.relabel "addhostname" {
+    forward_to = [loki.write.loki_monitoring.receiver]
+
+  rule {
+    target_label = "instance"
+    replacement  = constants.hostname
+  }
+}
+
+
+loki.write "loki_monitoring" {
+    endpoint {
+        url = "http://loki.domain:3100/loki/api/v1/push" // change for your Loki instance
+    }
+}

@@ -1,0 +1,55 @@
+---
+- name: Copy host keys and ssh certificate
+  ansible.builtin.copy:
+    src: "{{ app_source_dir }}/ssh-gen/"
+    dest: /etc/ssh/
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Search all .pub files
+  find:
+    paths: /etc/ssh/  
+    patterns: "*.pub"
+  register: files_found
+
+- name: Apply permissions 0640 in .pub files
+  file:
+    path: "{{ item.path }}"
+    mode: '0640'
+  loop: "{{ files_found.files }}"
+
+- name: Adding ssh_user_ca line
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    line: "TrustedUserCAKeys /etc/ssh/ssh_user_ca.pub"
+    create: no
+
+- name: Adding the host certificate line
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    line: "HostCertificate /etc/ssh/ssh_host_ed25519_key-cert.pub"
+    create: no
+
+- name: Adding the PermitRootLogin no to sshd_config
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    line: "PermitRootLogin no"
+    create: no
+
+- name: Adding the PasswordAuthentication no to sshd_config
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    line: "PasswordAuthentication no"
+    create: no
+
+- name: Replace SSH authorized key from 2-day user to only allow from from SemaphoreUI machine
+  ansible.builtin.lineinfile:
+    path: /home/ansible_automation/.ssh/authorized_keys
+    search_string: 'ssh-ed25519 ...' # 2-day user SSH public key
+    line: 'from="SemaphoreUI_IP_ADDRESS" ssh-ed25519 ..'  # after SemaphoreUI IP address, add the 2-day user SSH public key
+    owner: ansible_automation
+    group: ansible_automation
+    mode: '0644'
+
+

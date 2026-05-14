@@ -1,0 +1,14 @@
+
+---
+- name: Copy alloy configuration file
+  ansible.builtin.copy:
+    src: "../../monitoring/config.alloy"
+    dest: /etc/alloy/config.alloy
+    owner: alloy
+    group: alloy
+    mode: '0640'
+
+- name: Reload Alloy configuration 
+  ansible.builtin.uri:
+    url: http://localhost:12345/-/reload
+    method: POST

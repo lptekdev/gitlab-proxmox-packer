@@ -1,0 +1,49 @@
+stages:       # List of stages for jobs, and their order of execution
+- CreatePrepareImage
+- Deploy
+  
+
+variables:
+  APP_SOURCE_DIR: "$CI_PROJECT_DIR/"
+  VM_NAME: ""
+  IP_ADDRESS: ""
+  GW: ""
+  VLAN: ""
+  NETWORK: ""
+  PVE_URL: ""
+  PVE_USER: ""
+  PVE_PASSWORD: ""
+  PVE_NODE: ""
+
+CreatePrepareImage-job:
+  stage: CreatePrepareImage
+  tags: [docker]
+  image: alpine:latest
+  script:
+    - apk add unzip jq curl ansible openssh-keygen xorriso openssh-client git yq
+    - wget https://releases.hashicorp.com/packer/1.15.1/packer_1.15.1_linux_amd64.zip
+    - unzip -o packer_*.zip packer
+    - mv packer /usr/local/bin/
+    - cd $APP_SOURCE_DIR && chmod 600 ansible_automation # ansible_automation is the SSH private key for the 2-day user operations
+    # generate host keys and sign them to generate the certificate
+    - mkdir ssh-gen
+    - ssh-keygen -t ed25519 -f ssh-gen/ssh_host_ed25519_key  -N ""
+    - ssh-keygen -t rsa -f ssh-gen/ssh_host_rsa_key  -N ""
+    - ssh-keygen -t ecdsa -f ssh-gen/ssh_host_ecdsa_key  -N ""
+    - echo "$SSH_HOST_CA" > ssh-gen/ca_host # $SSH_HOST_CA is a CI/CD variable that contains the host CA private key to sign the SSH hosts keys
+    - chmod 600 ssh-gen/ca_host
+    - ssh-keygen -s ssh-gen/ca_host -I "$VM_NAME.domain" -h -n "$VM_NAME.domain,$IP_ADDRESS" -V +3650d ssh-gen/ssh_host_ed25519_key.pub
+    - ssh-keygen -s ssh-gen/ca_host -I "$VM_NAME.domain" -h -n "$VM_NAME.domain,$IP_ADDRESS" -V +3650d ssh-gen/ssh_host_ecdsa_key.pub 
+    - ssh-keygen -s ssh-gen/ca_host -I "$VM_NAME.domain" -h -n "$VM_NAME.domain,$IP_ADDRESS" -V +3650d ssh-gen/ssh_host_rsa_key.pub
+    - echo "$ssh_user_ca_pub" >> ssh-gen/ssh_user_ca.pub # $ssh_user_ca_pub is a CI/CD variable that contains the user CA pub key
+    # clones the monitoring repo to copy the alloy configuration file
+    - git clone .... # change to your git repository with the config.alloy file present in this repository
+    # replace the required values in cloud init files
+    - yq '.hostname = env(VM_NAME)' -i cloud-init/user-data
+    - yq '.network.ethernets.enp6s18.addresses = [env(IP_ADDRESS)+ "/24"]' -i cloud-init/network-config
+    - yq '.network.ethernets.enp6s18.gateway4 = env(GW)' -i cloud-init/network-config
+    - echo "Creating VM:\ "$VM_NAME $IP_ADDRESS $GW $VLAN $NETWORK
+    - packer init single-vm.pkr.hcl
+    - PACKER_LOG=1 packer build --debug -var "pve_node=$PVE_NODE" -var "pve_password=$PVE_PASSWORD" -var "pve_user=$PVE_USER" -var "pve_url=$PVE_URL" -var "app_source_dir=$APP_SOURCE_DIR" -var "ca_host=$SSH_HOST_CA" -var "vm_name=$VM_NAME" -var "vlan=$VLAN" -var "network=$NETWORK" single-vm.pkr.hcl
+  allow_failure: false    
+

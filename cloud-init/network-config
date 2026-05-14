@@ -1,0 +1,10 @@
+network:
+  version: 2
+  ethernets:
+    enp6s18:
+      dhcp4: no
+      addresses: 
+      nameservers:
+        addresses:
+          - 192.168.1.1
+      gateway4:

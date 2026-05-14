@@ -1,0 +1,50 @@
+#cloud-config
+hostname:
+users:
+  - name: USERNAME # Specify your own main user
+    passwd: 
+    shell: /bin/bash
+    groups: [sudo]
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: false
+  - name: ansible_automation # the 2-day operations user
+    shell: /bin/bash
+    groups: [sudo]
+    ssh_authorized_keys:
+      - ssh-ed25519 ... # public key for the 2-day operations user
+    lock_passwd: true
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    
+
+ssh_pwauth: false
+ssh:
+  install-server: yes
+
+ssh_deletekeys: true
+ssh_genkeytypes: [ed25519, rsa, ecdsa]
+
+timezone: 
+packages:
+  - qemu-guest-agent
+  - unattended-upgrades
+  - systemd-timesyncd
+  - git
+  - tree
+  - traceroute
+  - net-tools
+  - alloy
+
+apt:
+  sources:
+    grafana:
+      source: "deb https://apt.grafana.com stable main"
+      keyid: B53AE77BADB630A683046005963FA27710458545
+
+ntp:
+  servers: ['ntp...','ntp..']
+
+runcmd:
+- [systemctl, enable, qemu-guest-agent.service]
+- [systemctl, start, qemu-guest-agent.service]
+- [systemctl, enable, alloy.service]
+- [systemctl, start, alloy.service]

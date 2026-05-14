@@ -1,0 +1,29 @@
+---
+- name: Main playbook
+  hosts: default
+  become: yes
+  gather_facts: yes
+  tasks:
+    - name: Display the hostname
+      debug:
+        msg: "The hostname of the server is {{ ansible_hostname }}"
+
+    - name: VM setup and customization
+      block: 
+                                
+        ## SECTION FOR THE SPECIFIC SERVICE OF THE VM ##
+        - name: Install and configure certificate access
+          import_tasks:
+            file: ./tasks/configure-certificate-access.yml
+        
+        - name: Configure monitoring
+          import_tasks:
+            file: ./tasks/configure_monitoring.yml
+        
+        ## END OF SECTION FOR THE SPECIFIC SERVICE OF THE VM ##
+        
+    - name: Ensure filesystem changes are flushed to disk
+      ansible.builtin.shell: sync
+      become: yes
+
+
